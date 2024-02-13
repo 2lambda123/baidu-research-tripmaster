@@ -223,7 +223,7 @@ class GPUClusterJobLauncher(TMJobLauncher):
             afs_remote = self.hyper_params.fs.afs_remote
             afs_local = self.hyper_params.fs.afs_local
             if afs_remote and afs_local:
-                f.write(f"mount_afs = \"true\"\n")
+                f.write("mount_afs = \"true\"\n")
                 f.write(f"afs_remote_mount_point = \"{afs_remote}\"\n")
                 f.write(f"afs_local_mount_point = \"{afs_local}\"\n")
 
@@ -517,7 +517,7 @@ $HADOOP_HOME/bin/hadoop fs \
         elif self.hyper_params.submission.package_mode == "online_install":
             self.save_requirements()
         else:
-            raise Exception(f"bad package_mode setting, must be [pack_local|online_install]")
+            raise Exception("bad package_mode setting, must be [pack_local|online_install]")
 
         self.dump_job_modules()
         self.link_files()

@@ -315,7 +315,7 @@ class TMSerializable(TMConfigurable):
             try:
                 path = TMRepo().get(path)
             except Exception as e:
-                logger.info(f"Failed to download from repo")
+                logger.info("Failed to download from repo")
                 raise
         states = pickle.load(open(path, "rb"))
         serialized_hyper_params = TMHyperParams(states[cls.HYPER_PARAMS_KEY]) \

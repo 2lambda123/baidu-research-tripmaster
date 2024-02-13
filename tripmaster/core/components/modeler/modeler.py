@@ -43,7 +43,7 @@ def merge_reconstructs(result1, result2):
         raise Exception("unable to merge set type values")
     elif isinstance(result1, list):
         if len(result1) != len(result2):
-            raise Exception(f"list length not equal for : "
+            raise Exception("list length not equal for : "
                             f"{len(result1)} != {len(result2)}")
         return [merge_reconstructs(x, y) for x, y in zip(result1, result2)]
     elif isinstance(result1, dict):
