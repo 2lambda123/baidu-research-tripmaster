@@ -136,8 +136,7 @@ class TMOperator(TMOperatorInterface):
 
     def device(self, local_rank):
 
-        use_gpu = self.distributed_strategy.use_gpu
-        if use_gpu:
+        if use_gpu := self.distributed_strategy.use_gpu:
             prefix = D.device_prefix()
             device = f"{prefix}:{local_rank}" if local_rank else prefix
         else:
@@ -150,9 +149,8 @@ class TMOperator(TMOperatorInterface):
         reallocate data to current working device determined by local_rank
         """
 
-        device = self.device(local_rank)
 
-        if device != "cpu":
+        if (device := self.device(local_rank)) != "cpu":
             data = self.machine.BatchTraits.to_device(data, device)
         return data
 
@@ -251,7 +249,7 @@ class TMLearnerMixin(TMConfigurable):
     def check_optimizer_submodule_match(self, submodules):
         valid_submoudle_keys = set()
         for key, modules in submodules.items():
-            parameters = sum([list(m.parameters()) for m in modules], [])
+            parameters = sum(list(m.parameters()) for m in modules)
             if len(parameters) > 0:
                 valid_submoudle_keys.add(key)
 
@@ -294,7 +292,7 @@ class TMLearnerMixin(TMConfigurable):
 
         for name, modules in submodules.items():
 
-            parameters = sum([list(m.parameters()) for m in modules], [])
+            parameters = sum(list(m.parameters()) for m in modules)
             if len(parameters) == 0:
                 continue
 
@@ -327,8 +325,7 @@ class TMLearnerMixin(TMConfigurable):
 
         self.optimization_strategy.on_evaluated(self.machine, evaluation_results)
 
-        model_info = self.model_selector.select_model(evaluation_results, self.machine, self)
-        if model_info:
+        if model_info := self.model_selector.select_model(evaluation_results, self.machine, self):
             self.good_model_discovered_signal.send(model_info)
 
     @abc.abstractmethod

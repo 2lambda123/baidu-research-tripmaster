@@ -636,7 +636,7 @@ class TMSystem(TMSerializableComponent):
         if self.tp_modeler is not None:
             input_data_stream.level = TMDataLevel.Problem
 
-            logger.info(f"problem data recovered: ")
+            logger.info("problem data recovered: ")
             # for channel in input_data_stream.channels:
             #     logger.info(f"\t{channel}: {len(input_data_stream[channel])}")
 

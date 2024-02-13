@@ -77,7 +77,7 @@ class TorchNoDistributedStrategy(TMDistributedStrategy):
 
         if world_size > 1 and use_gpu:
             logger.warning(
-                f"You have request to use multiple gpus, but with Single trainer. Only one of the gpus will be used")
+                "You have request to use multiple gpus, but with Single trainer. Only one of the gpus will be used")
 
     def run(self, func, train_data_streams, runtime_options):
         """
@@ -193,10 +193,10 @@ class TorchDistributedDataParallelStrategy(TMDistributedStrategy):
                 logger.info("Using DDP trainer for multiple gpu")
             else:
                 logger.warning(
-                    f"You have request to use DDP trainer, but you have configured to use only one gpu.")
+                    "You have request to use DDP trainer, but you have configured to use only one gpu.")
         else:
             logger.warning(
-                f"You have request to use DDP trainer, but you have configured to use no gpu. Only for test purpose")
+                "You have request to use DDP trainer, but you have configured to use no gpu. Only for test purpose")
 
     def run(self, func, train_data_streams, runtime_options):
         """
@@ -217,8 +217,7 @@ class TorchDistributedDataParallelStrategy(TMDistributedStrategy):
 
         self.distributed = True
 
-        device = self.operator.device(local_rank)
-        if device == "cpu":
+        if (device := self.operator.device(local_rank)) == "cpu":
             backend = "gloo"
             device_ids = None
         else:

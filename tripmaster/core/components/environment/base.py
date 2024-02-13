@@ -5,13 +5,13 @@ import enum
 import types
 from abc import abstractmethod
 from itertools import zip_longest
-from random import shuffle
 from typing import Type, Optional, Union, Tuple, List, TypeVar
 
 import numpy as np
 from more_itertools import chunked
 
 from tripmaster import T
+import secrets
 
 ObsType = TypeVar("ObsType")
 ActType = TypeVar("ActType")
@@ -314,7 +314,7 @@ class TMEnvironmentPool(TMSerializableComponent):
     def choose(self, sample_num):
 
         indexes = list(range(len(self.__envs)))
-        shuffle(indexes)
+        secrets.SystemRandom().shuffle(indexes)
 
         for index_chunk in chunked(indexes, sample_num):
             yield TMBatchEnvironment(envs=[self.__envs[index] for index in index_chunk])
@@ -391,13 +391,13 @@ class TMEnvironmentPoolGroup(TMSerializableComponent):
             if not ratio or (isinstance(ratio, (int, float)) and ratio < 0):
                 return
     
-        import random, copy
+        import copy
         sampled_channels = []
         for channel in self.eval_pools:
             assert channel in self._pools
     
             sampled = [copy.deepcopy(env) for env in self._pools[channel].envs
-                       if random.random() < ratio]
+                       if secrets.SystemRandom().random() < ratio]
             if len(sampled) <= 0:
                 continue
             

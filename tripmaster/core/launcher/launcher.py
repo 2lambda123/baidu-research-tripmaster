@@ -126,8 +126,7 @@ def launch(app_class):
     job = TMJob(app_class, hyper_params, startup_script_path, parsed_args.experiment, rest_args[1:])
 
     launcher_type = hyper_params.launcher.type
-    launcher_params = hyper_params.launcher.strategies[launcher_type]
-    if launcher_params:
+    if launcher_params := hyper_params.launcher.strategies[launcher_type]:
         launcher_params.conf_paths = conf_paths
 
     launcher_class = TMLauncherFactory.get().choose(launcher_type)

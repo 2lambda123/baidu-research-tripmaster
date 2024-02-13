@@ -43,7 +43,7 @@ def merge_reconstructs(result1, result2):
         raise Exception("unable to merge set type values")
     elif isinstance(result1, list):
         if len(result1) != len(result2):
-            raise Exception(f"list length not equal for : "
+            raise Exception("list length not equal for : "
                             f"{len(result1)} != {len(result2)}")
         return [merge_reconstructs(x, y) for x, y in zip(result1, result2)]
     elif isinstance(result1, dict):
@@ -561,8 +561,7 @@ class TMMultiModeler(TMMultiModelerInterface, TMModeler):
         result_level = data_stream.level
 
         for stream_name in data_stream.streams():
-            modeler = self.sub_components[stream_name]
-            if modeler is None:
+            if (modeler := self.sub_components[stream_name]) is None:
                 result[stream_name] = data_stream[stream_name]
             else:
                 result_datastream = modeler.model_datastream(data_stream[stream_name], scenario=scenario)
@@ -587,8 +586,7 @@ class TMMultiModeler(TMMultiModelerInterface, TMModeler):
         result_level = data_stream.level
 
         for stream_name in data_stream.streams():
-            modeler = self.sub_components[stream_name]
-            if modeler is None:
+            if (modeler := self.sub_components[stream_name]) is None:
                 result[stream_name] = data_stream[stream_name]
             else:
                 result_datastream = modeler.reconstruct_datastream(data_stream[stream_name], inference=inference)

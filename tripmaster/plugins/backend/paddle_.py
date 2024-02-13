@@ -47,7 +47,7 @@ class PaddleNoDistributedStrategy(TMDistributedStrategy):
 
         if world_size > 1 and use_gpu:
             logger.warning(
-                f"You have request to use multiple gpus, but with Single trainer. Only one of the gpus will be used")
+                "You have request to use multiple gpus, but with Single trainer. Only one of the gpus will be used")
 
     def run(self, func, train_data_streams, runtime_options):
         """
@@ -111,10 +111,10 @@ class PaddleDistributedDataParallelStrategy(TMDistributedStrategy):
                 logger.info("Using DDP trainer for multiple gpu")
             else:
                 logger.warning(
-                    f"You have request to use DDP trainer, but you have configured to use only one gpu.")
+                    "You have request to use DDP trainer, but you have configured to use only one gpu.")
         else:
             logger.warning(
-                f"You have request to use DDP trainer, but you have configured to use no gpu. Only for test purpose")
+                "You have request to use DDP trainer, but you have configured to use no gpu. Only for test purpose")
 
     def run(self, func, train_data_streams, runtime_options):
         """
@@ -208,10 +208,10 @@ class PaddleFleetParallelStrategy(TMDistributedStrategy):
                 logger.info("Using DDP trainer for multiple gpu")
             else:
                 logger.warning(
-                    f"You have request to use DDP trainer, but you have configured to use only one gpu.")
+                    "You have request to use DDP trainer, but you have configured to use only one gpu.")
         else:
             logger.warning(
-                f"You have request to use DDP trainer, but you have configured to use no gpu. Only for test purpose")
+                "You have request to use DDP trainer, but you have configured to use no gpu. Only for test purpose")
 
     def run(self, func, train_data_streams, runtime_options):
         """

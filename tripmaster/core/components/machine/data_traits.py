@@ -184,7 +184,7 @@ class TMSampleBatchTraits(object):
     @classmethod
     def batch(cls, samples):
 
-        if all([sample is None for sample in samples]):
+        if all(sample is None for sample in samples):
             return None
 
         assert isinstance(samples, Sequence)

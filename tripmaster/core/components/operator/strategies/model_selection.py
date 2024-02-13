@@ -79,7 +79,7 @@ class LatestModelSelectionStrategy(TMModelSelectionStrategy):
                 #    os.remove(self.prev_model_name + ".trainer.pt")
 
 
-            logger.warning(f"latest model found, saving... ")
+            logger.warning("latest model found, saving... ")
 
             model_info = SelectedModelInfo(
                 prefix=self.hyper_params.prefix,

@@ -43,7 +43,7 @@ class TMTensorElementTraits(TMElementTraits):
 
         tensor_elems = [x for x in list_of_samples if isinstance(x, np.ndarray) or T.is_tensor(x)]
 
-        ndim = max([x.ndim for x in tensor_elems])
+        ndim = max(x.ndim for x in tensor_elems)
         first_elem = tensor_elems[0]
         # if isinstance(first_elem, np.ndarray):
         #     list_of_samples = [T.to_tensor(b) for b in list_of_samples]
