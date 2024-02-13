@@ -8,6 +8,7 @@ from tripmaster import logging
 
 import os
 import glob
+from security import safe_command
 
 logger = logging.getLogger(__name__)
 
@@ -299,7 +300,7 @@ $HADOOP_HOME/bin/hadoop fs \
 
         afs_commmand = os.path.join(self.submmit_directory, "afs.sh")
 
-        result = subprocess.run(['sh', afs_commmand, '-stat',
+        result = safe_command.run(subprocess.run, ['sh', afs_commmand, '-stat',
                                  self.hyper_params.submission.site_packages_path],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
@@ -329,13 +330,13 @@ $HADOOP_HOME/bin/hadoop fs \
 
         logger.info("Site-packages of current python has been packaged")
 
-        result = subprocess.run(['sh', afs_commmand, '-put', output_filename,
+        result = safe_command.run(subprocess.run, ['sh', afs_commmand, '-put', output_filename,
                                  self.hyper_params.submission.site_packages_path],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         if result.returncode == 0:
             logger.info("Successfully upload site-packages into afs")
-            subprocess.run(['rm', output_filename],
+            safe_command.run(subprocess.run, ['rm', output_filename],
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         else:
@@ -352,7 +353,7 @@ $HADOOP_HOME/bin/hadoop fs \
 
         import subprocess
 
-        result = subprocess.run(['pip', "freeze"],
+        result = safe_command.run(subprocess.run, ['pip', "freeze"],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         requirements = result.stdout.decode("utf-8").split("\n")
@@ -533,7 +534,7 @@ $HADOOP_HOME/bin/hadoop fs \
 
         import subprocess
 
-        result = subprocess.run(['sh', os.path.join(self.submmit_directory, "run.sh")],
+        result = safe_command.run(subprocess.run, ['sh', os.path.join(self.submmit_directory, "run.sh")],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         os.chdir(this_dir)
