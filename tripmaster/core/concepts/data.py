@@ -9,6 +9,7 @@ from typing import Dict, Type
 
 from tripmaster import logging
 from tripmaster.core.concepts.component import TMConfigurable, TMSerializable, TMSerializableComponent
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -193,13 +194,13 @@ class TMDataStream(TMSerializableComponent):
             if not ratio or (isinstance(ratio, (int, float)) and ratio < 0):
                 return
 
-        import random, copy 
+        import copy 
         sampled_channels = []
         for channel in self.learn_channels:
             assert channel in self.__channels
 
             sampled = [copy.deepcopy(sample) for sample in self.__channels[channel]
-                            if random.random() < ratio]
+                            if secrets.SystemRandom().random() < ratio]
             if len(sampled) <= 0:
                 continue
             sampled_channels.append(f"{channel}#sampled")
