@@ -245,8 +245,7 @@ class TMReinforceEvaluatorMixin(TMEvaluatorMixin):
         eval_env_nums = 0
         with P.OptimizerBehaviors.no_grad():
             for batch_env in batch_env_pool.envs():
-                truth = batch_env.truth()
-                if truth is not None:
+                if (truth := batch_env.truth()) is not None:
                     truth = self.host.reallocate_data(truth, local_rank)
 
                 try:

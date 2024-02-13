@@ -217,8 +217,7 @@ class TorchDistributedDataParallelStrategy(TMDistributedStrategy):
 
         self.distributed = True
 
-        device = self.operator.device(local_rank)
-        if device == "cpu":
+        if (device := self.operator.device(local_rank)) == "cpu":
             backend = "gloo"
             device_ids = None
         else:
