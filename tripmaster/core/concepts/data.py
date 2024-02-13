@@ -2,12 +2,13 @@
 base class for data
 """
 import abc
+import copy
 import enum
 from collections import defaultdict
 from typing import Dict, Type
 
 from tripmaster import logging
-from tripmaster.core.concepts.component import TMConfigurable, TMSerializable
+from tripmaster.core.concepts.component import TMConfigurable, TMSerializable, TMSerializableComponent
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +67,10 @@ class TMDataChannel(TMConfigurable):
     TMLearningDataContainer
     """
 
-    def __init__(self, hyper_params=None, data=None, level: TMDataLevel=None):  # kwargs is for multiple inheritance
+    def __init__(self, hyper_params=None, data=None, level: TMDataLevel=None, name=None):  # kwargs is for multiple inheritance
         super().__init__(hyper_params)
         self._data = data
+        self._name = name
         self._sample_num = None
         self.__level = level
 
@@ -80,6 +82,14 @@ class TMDataChannel(TMConfigurable):
                 return False
         except:
             return False
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        self._name = name
 
     @property
     def sample_num(self):
@@ -122,7 +132,7 @@ class TMDataChannel(TMConfigurable):
     def __len__(self):
         return len(self._data)
 
-    def degenerate(self):
+    def reuse(self):
         
         import types
         if isinstance(self._data, (list, tuple)):
@@ -132,7 +142,7 @@ class TMDataChannel(TMConfigurable):
 
 
 
-class TMDataStream(TMSerializable):
+class TMDataStream(TMSerializableComponent):
     """
     TMDataStream
     Some thoughts, but not feasible: "Note: as a fundamental components of TM which across all the data pipeline,
@@ -149,6 +159,13 @@ class TMDataStream(TMSerializable):
 
         if states is not None:
             self.load_states(states)
+            logger.info("add sampled training eval channel ")
+
+            if self.hyper_params.train_sample_ratio_for_eval and self.hyper_params.train_sample_ratio_for_eval > 0:
+                ratio = self.hyper_params.train_sample_ratio_for_eval
+                self.add_sampled_training_eval_channels(ratio)
+
+            logger.info("sampled training eval channel added")
 
     @property
     def level(self):
@@ -158,6 +175,9 @@ class TMDataStream(TMSerializable):
     def level(self, level):
         self.__level = level
 
+        for channel in self.channels:
+            self[channel].level = level
+
     @property
     def channels(self):
         return self.__channels.keys()
@@ -166,10 +186,12 @@ class TMDataStream(TMSerializable):
     def learn_channels(self):
         return self.hyper_params.channels.learn if self.hyper_params.channels.learn else []
 
-    def add_sampled_training_eval_channels(self):
+    def add_sampled_training_eval_channels(self, ratio=None):
 
-        if not self.hyper_params.train_sample_ratio_for_eval or self.hyper_params.train_sample_ratio_for_eval <= 0:
-            return 
+        if ratio is None:
+            ratio = self.hyper_params.train_sample_ratio_for_eval
+            if not ratio or (isinstance(ratio, (int, float)) and ratio < 0):
+                return
 
         import random, copy 
         sampled_channels = []
@@ -177,7 +199,7 @@ class TMDataStream(TMSerializable):
             assert channel in self.__channels
 
             sampled = [copy.deepcopy(sample) for sample in self.__channels[channel]
-                            if random.random() < self.hyper_params.train_sample_ratio_for_eval]
+                            if random.random() < ratio]
             if len(sampled) <= 0:
                 continue
             sampled_channels.append(f"{channel}#sampled")
@@ -213,7 +235,8 @@ class TMDataStream(TMSerializable):
     def __setitem__(self, key, value):
         if not isinstance(value, TMDataChannel):
             value = TMDataChannel(data=value, level=self.__level)
-
+        if value.name is None:
+            value.name = key
         self.__channels[key] = value
 
     def test(self, test_config):
@@ -221,17 +244,33 @@ class TMDataStream(TMSerializable):
         for k, v in self.__channels.items():
             v.sample_num = test_config.sample_num
 
-    def states(self):
+        self.add_sampled_training_eval_channels(ratio=1)
+
+    def reuse(self):
         for k, v in self.__channels.items():
-            v.degenerate()
+            v.reuse()
+
+
+    def states(self):
+
+        self.reuse()
 
         return {"channels": {k: v._data for k, v in self.__channels.items() if not k.endswith("#sampled")},
                 "level": self.__level}
 
+    def secure_hparams(self):
+
+        hyper_params = copy.deepcopy(self.hyper_params)
+        for channel in hyper_params.channels:
+            hyper_params.channels[channel] = [k for k in hyper_params.channels[channel]
+                                                   if not k.endswith("#sampled")]
+        return hyper_params
+
+
     def load_states(self, states):
         self.__level = states["level"]
         self.__channels = {k: TMDataChannel(data=v, level=self.__level)
-                           for k, v in states["channels"].items()}
+                           for k, v in states["channels"].items() if not k.endswith("#sampled")}
 
 
 

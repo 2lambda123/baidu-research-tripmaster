@@ -5,6 +5,7 @@ from more_itertools import ichunked
 from tripmaster.core.components.machine.data_traits import TMElementTraits, TMElementBatchTraits, \
     TMElementTraitsFactory, UnsupportedTraitsError
 import numpy as np
+import numbers
 
 from tripmaster.core.components.backend import TMBackendFactory
 
@@ -13,7 +14,7 @@ T = B.BasicTensorOperations
 
 class TMIntElementTraits(TMElementTraits):
 
-    ElementType = (bool, int, np.integer)
+    ElementType = (bool, numbers.Integral)
 
     @classmethod
     def collate(self, list_of_samples):
@@ -24,11 +25,11 @@ class TMIntElementTraits(TMElementTraits):
 
 class TMFloatElementTraits(TMElementTraits):
 
-    ElementType = (float, np.float64, np.float32)
+    ElementType = (float, np.floating)
 
     @classmethod
     def collate(self, list_of_samples):
-        return T.to_tensor(np.array(list_of_samples)).cast(B.Types.Float)
+        return T.cast(T.to_tensor(np.array(list_of_samples)), B.Types.Float32)
 
 
 class TMTensorElementTraits(TMElementTraits):
@@ -38,33 +39,41 @@ class TMTensorElementTraits(TMElementTraits):
     @classmethod
     def collate(self, list_of_samples):
 
-        first_elem = list_of_samples[0]
+        assert isinstance(list_of_samples, Sequence)
+
+        tensor_elems = [x for x in list_of_samples if isinstance(x, np.ndarray) or T.is_tensor(x)]
+
+        ndim = max([x.ndim for x in tensor_elems])
+        first_elem = tensor_elems[0]
         # if isinstance(first_elem, np.ndarray):
         #     list_of_samples = [T.to_tensor(b) for b in list_of_samples]
         
         shapes = [list(x.shape if isinstance(x, np.ndarray) else T.shape(x)) for x in list_of_samples]
-
-        max_shape = tuple([max(x[i] for x in shapes) for i in range(first_elem.ndim)])
-    
+        shapes = [x + [0] * (ndim - len(x)) for x in shapes]
+        max_shape = tuple([max(x[i] for x in shapes) for i in range(ndim)])
 
         for idx, b in enumerate(list_of_samples):
             this_shape = b.shape if isinstance(b, np.ndarray) else T.shape(b)
             if tuple(this_shape) == max_shape:
-                continue 
-                
-            if isinstance(first_elem, np.ndarray):
-                pad = [(0, max_shape[i] - this_shape[i]) for i in range(b.ndim)]
+                continue
+
+            if len(this_shape) < ndim:
+                this_shape = list(this_shape) + [0] * (ndim - len(this_shape))
+                b = b.reshape(this_shape)
+
+            if isinstance(b, np.ndarray):
+                pad = [(0, max_shape[i] - this_shape[i]) for i in range(ndim)]
                 b = np.pad(b, pad)
             else:  # is tensor 
 
-                dim_order = range(first_elem.ndim - 1, -1, -1)
+                dim_order = range(ndim - 1, -1, -1)
 
                 pad = [[0, max_shape[i] - this_shape[i]] for i in dim_order]
                 pad = sum(pad, [])
                 b = T.pad(b, pad, 0)
 
             list_of_samples[idx] = b
-        
+
         if isinstance(first_elem, np.ndarray):
             result = T.to_tensor(np.stack(list_of_samples, 0))
         else:
@@ -111,14 +120,16 @@ class TMDictElementTraits(TMElementTraits):
         """
         assert isinstance(samples, Sequence)
 
-        first_elem = samples[0]
-        assert isinstance(first_elem, dict)
+        dict_elem = [x for x in samples if isinstance(x, dict)]
+        assert len(dict_elem) > 0
+
+        first_elem = dict_elem[0]
 
         batched = dict()
 
         for key in first_elem.keys():
 
-            values = [d[key] for d in samples]
+            values = [d[key] if d is not None else None for d in samples ]
             try:
                 traits = TMElementTraitsFactory.get().get_element_traits(values)
                 batched[key] = traits.collate(values)
@@ -146,17 +157,21 @@ class TMDictElementBatchTraits(TMElementBatchTraits):
         unbatched_data = collections.defaultdict(list)
 
         for key in batched_data.keys():
-            try:
-                traits = TMElementTraitsFactory.get().get_element_batch_traits(batched_data[key])
-                unbatched_data[key] = traits.decollate(batched_data[key])
-            except UnsupportedTraitsError as e:
-                unbatched_data[key] = batched_data[key]
+            if batched_data[key] is None:
+                unbatched_data[key] = [None] * batch_size
+            else:
+                try:
+                    traits = TMElementTraitsFactory.get().get_element_batch_traits(batched_data[key])
+                    unbatched_data[key] = traits.decollate(batched_data[key])
+                except UnsupportedTraitsError as e:
+                    unbatched_data[key] = batched_data[key]
 
         result_list = list()
         key_list = list(batched_data.keys())
 
         for sample in zip(*(unbatched_data[key] for key in key_list)):
-            result_list.append(dict(zip(key_list, sample)))
+            new_sample = dict(zip(key_list, sample))
+            result_list.append(new_sample)
 
         return result_list
 

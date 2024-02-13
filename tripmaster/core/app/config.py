@@ -13,9 +13,8 @@ class Serializable:
     """
     ProblemModeler
     """
-    save: bool = False
-    load: bool = False
-    path: Optional[str] = None
+    save: Optional[str] = None
+    load: Optional[str] = None
     multi_path: Optional[Dict] = None
 
 
@@ -123,7 +122,7 @@ class Operator:
 
 
 @dataclass
-class Learner(Operator):
+class Learner(Operator,dict):
 
     optimizer: Optimizer = field(default_factory=lambda: Optimizer())
     modelselector: Dict[str, Any] = field(default_factory=lambda: dict())
@@ -131,7 +130,7 @@ class Learner(Operator):
 
 
 @dataclass
-class Inferencer(Operator):
+class Inferencer(Operator, dict):
     pass
 
 
@@ -159,6 +158,15 @@ class System(Component):
 
 #    contracts: Contracts = Contracts()
 
+@dataclass
+class ReinforceSystem(Component):
+
+    env_builder: Optional[Dict] = None
+    pm_modeler: Optional[Dict] = None
+    policy: Machine = field(default_factory=lambda: Machine())
+    learner: Optional[Learner] = None
+    inferencer: Optional[Inferencer] = None
+
 
 @dataclass
 class MultiSystem(Component):
@@ -182,7 +190,7 @@ class Data:
 
 @dataclass
 class IO:
-    env: Optional[Dict[str, Any]] = None
+    epg: Optional[Dict[str, Any]] = None
     input: Optional[Dict[str, Any]] = None
     output: Optional[Dict[str, Any]] = None
 
@@ -210,7 +218,7 @@ class Job:
     testing: bool = False
     test: Optional[Test] = None
 
-    data_mode: bool = False
+    mode: Optional[str] = None  # "data" for data mode, "eval" for eval mode
 
     # operation:
     #   from_scratch: reinitialize the machine and operator;

@@ -4,6 +4,8 @@ resource
 
 import collections
 import abc
+import dataclasses
+
 from more_itertools import ichunked
 import collections
 import inspect
@@ -69,20 +71,25 @@ class TMElementTraitsFactory(object):
             self.batch_traits_map[t] = strategy
 
     def get_element_traits(self, list_of_elems) -> TMElementTraits:
-        element = list_of_elems[0]
-        elem_type = type(element)
-
-        if elem_type in self.element_traits_map:
-            return self.element_traits_map[elem_type]
-        else:
-            for key in self.element_traits_map.keys():
-                if isinstance(key, (types.FunctionType, types.MethodType)) and key(element):
-                    return self.element_traits_map[key]
+        elements = [elem for elem in list_of_elems if elem is not None]
+        if len(elements) == 0:
+            raise Exception("cannot get element traits from empty list")
+        element = elements[0]
+        # elem_type = type(element)
+        #
+        # if elem_type in self.element_traits_map:
+        #     return self.element_traits_map[elem_type]
+        # else:
+        for key in self.element_traits_map.keys():
+            if isinstance(key, (types.FunctionType, types.MethodType)) and key(element):
+                return self.element_traits_map[key]
+            if isinstance(key, type) and isinstance(element, key):
+                return self.element_traits_map[key]
     #
             # for t in inspect.getmro(elem_type):
             #     if t in self.element_traits_map:
             #         return self.element_traits_map[t]
-        raise UnsupportedTraitsError(f"Unsupported element type {elem_type}")
+        raise UnsupportedTraitsError(f"Unsupported element type {type(element)}")
 
     def get_element_batch_traits(self, batch) -> TMElementBatchTraits:
 
@@ -176,6 +183,9 @@ class TMSampleBatchTraits(object):
 
     @classmethod
     def batch(cls, samples):
+
+        if all([sample is None for sample in samples]):
+            return None
 
         assert isinstance(samples, Sequence)
         traits = TMElementTraitsFactory.get().get_element_traits(samples)
@@ -273,10 +283,100 @@ class TMSampleBatchTraits(object):
         @rtype:
         """
 
+        if batched_data is None:
+            return None
+
+
         traits = TMElementTraitsFactory.get().get_element_batch_traits(batched_data)
         target_data = traits.to_device(batched_data, device)
 
         return target_data
+
+    @classmethod
+    def mask_batch(cls, batch_data, batch_mask):
+
+
+        from tripmaster import T
+        
+        if T.all(~batch_mask):
+            return batch_data 
+
+        if isinstance(batch_mask, (list, tuple)):
+            batch_size = len(batch_mask)
+        elif T.is_tensor(batch_mask):
+            batch_size = batch_mask.shape[0]
+        else:
+            raise Exception(f"unsupported batch mask type: {type(batch_mask)}")
+
+        if isinstance(batch_data, collections.Sequence):
+            assert len(batch_data) == batch_size, f"batch data size {len(batch_data)} " \
+                                                  f"does not match batch mask size {batch_size}"
+            return [d for d, m in zip(batch_data, batch_mask) if not m]
+        elif T.is_tensor(batch_data):
+            assert batch_data.shape[0] == batch_size
+            return batch_data[~batch_mask]
+        elif isinstance(batch_data, collections.Mapping):
+            return dict((key, cls.mask_batch(batch_data[key], batch_mask)) for key in batch_data.keys())
+        elif dataclasses.is_dataclass(batch_data):
+            return dataclasses.replace(batch_data, **dict((key.name, cls.mask_batch(getattr(batch_data, key.name), batch_mask))
+                                                          for key in dataclasses.fields(batch_data)))
+        else:
+            raise Exception(f"unsupported batch data type: {type(batch_data)}")
+
+    @classmethod
+    def recover_masked_batch(cls, masked_batch_data, batch_mask):
+        """
+
+        @param masked_batch_data:
+        @type masked_batch_data:
+        @param batch_mask:
+        @type batch_mask:
+        @return:
+        @rtype:
+        """
+        from tripmaster import T
+
+        if T.all(~batch_mask):
+            return masked_batch_data 
+
+        if isinstance(batch_mask, (list, tuple)):
+            batch_size = len(batch_mask)
+            un_masked_index = [i for i, m in enumerate(batch_mask) if not m]
+            un_masked_index_size = len(un_masked_index)
+        elif T.is_tensor(batch_mask):
+            batch_size = batch_mask.shape[0]
+            un_masked_index = (~batch_mask).nonzero().squeeze(1)
+            un_masked_index_size = un_masked_index_size.shape[0]
+        else:
+            raise Exception(f"unsupported batch mask type: {type(batch_mask)}")
+
+        if isinstance(masked_batch_data, collections.Sequence):
+            assert len(masked_batch_data) == un_masked_index_size
+            result = [None] * batch_size
+            for i, d in enumerate(masked_batch_data):
+                result[un_masked_index[i]] = d
+            return result
+        elif T.is_tensor(masked_batch_data):
+            assert masked_batch_data.shape[0] == un_masked_index_size, f"{masked_batch_data.shape} != {un_masked_index_size}" 
+            unmasked_shape = list(masked_batch_data.shape)
+            unmasked_shape[0] = batch_size
+            result = T.zeros(* unmasked_shape, dtype=masked_batch_data.dtype, device=masked_batch_data.device)
+            for i, d in enumerate(masked_batch_data):
+                result[un_masked_index[i]] = d
+            return result
+        elif isinstance(masked_batch_data, collections.Mapping):
+            return dict((key, cls.recover_masked_batch(masked_batch_data[key], batch_mask))
+                        for key in masked_batch_data.keys())
+        elif dataclasses.is_dataclass(masked_batch_data):
+            return dataclasses.replace(masked_batch_data,
+                                       **dict((key.name, cls.recover_masked_batch(getattr(masked_batch_data, key.name), batch_mask))
+                                        for key in dataclasses.fields(masked_batch_data)))
+
+        else:
+            raise Exception(f"unsupported batch data type: {type(masked_batch_data)}")
+
+
+
 
 
 class TMSampleChunckBatchTraits(TMSampleBatchTraits):

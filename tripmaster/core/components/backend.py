@@ -79,6 +79,34 @@ class TMBasicTensorOperations(object):
     Tensor = None
 
     @classmethod
+    def zeros(cls, *, dtype=None, device=None):
+        pass
+
+    @classmethod
+    def ones(cls, *, dtype=None, device=None):
+        pass
+
+    @classmethod
+    def all(cls, a):
+        pass 
+    
+    @classmethod
+    def any(cls, a):
+        pass
+
+    @classmethod
+    def logical_and(cls, a, b):
+        pass
+
+    @classmethod
+    def logical_or(cls, a, b):
+        pass
+
+    @classmethod
+    def logical_not(cls, a):
+        pass
+
+    @classmethod
     def is_tensor(self, x):
         pass
 

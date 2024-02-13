@@ -37,10 +37,10 @@ class TMSuperviseOperator(TMOperator):
         return memory_samplestream
 
     def unfit_memory(self, memory_samplestream: Union[TMDataStream, TMMultiDataStream],
-                                    ):
+                     scenario: TMScenario, with_truth=False):
 
         machine_samplestream = self.memory_modeler.reconstruct_datastream(memory_samplestream,
-                                                                          scenario=self.scenario)
+                                                                          scenario=scenario)
 
         return machine_samplestream
 
@@ -55,11 +55,12 @@ class TMSuperviseOperator(TMOperator):
 
         """
         machine_batchstream = self.batch_modeler.model_datastream(machine_stream,
-                                                                  scenario=self.scenario)
+                                                                  scenario=self.scenario,
+                                                                  )
 
         return machine_batchstream
 
-    def unbatchify(self, machine_batchstream: TMDataStream):
+    def unbatchify(self, machine_batchstream: TMDataStream, scenario:TMScenario, with_truth=False):
         """
 
         Args:
@@ -69,9 +70,11 @@ class TMSuperviseOperator(TMOperator):
 
         """
         machine_samplestream = self.batch_modeler.reconstruct_datastream(machine_batchstream,
-                                                                         scenario=self.scenario)
+                                                                         scenario=scenario,
+                                                                         with_truth=with_truth)
 
         return machine_samplestream
+
 
 
 
@@ -84,7 +87,7 @@ class TMSupervisedEvaluatorMixin(TMEvaluatorMixin):
 
 
 
-    def evaluate_channel(self, data_loader, channel, local_rank, epoch):
+    def evaluate_channel(self, data_loader, channel, scenario, local_rank, epoch):
         """evaluate(
 
         Args:
@@ -99,12 +102,15 @@ class TMSupervisedEvaluatorMixin(TMEvaluatorMixin):
         batch_traits = self.machine.BatchTraits
 
         with P.OptimizerBehaviors.no_grad():
-            for i, truth in tqdm(enumerate(data_loader)):
+            for i, truth in tqdm(enumerate(data_loader), desc=f"Evaluating Channel {channel}: "):
                 # measure data loading time
 
                 try:
                     truth = self.reallocate_data(truth, local_rank)
-                    inferenced = self.machine.forward_with_validation(truth, scenario=TMScenario.Evaluation)
+
+                    self.machine.validate_forward_input(truth, scenario=scenario, for_eval=True)
+                    inferenced = self.machine.forward(truth, scenario=scenario, for_eval=True)
+                    self.machine.validate_forward_output(inferenced, scenario=scenario, for_eval=True)
 
                     # truth.update(inferenced)  # sometimes the truth is constructed by machine
                     # for key in truth:
@@ -114,8 +120,11 @@ class TMSupervisedEvaluatorMixin(TMEvaluatorMixin):
                     #         inferenced[key] = truth[key]
                     deep_merge_dict(inferenced, truth)
 
-                    loss = self.machine.loss(inferenced, truth).detach()
                     batch_size = batch_traits.batch_size(truth)
+                    if scenario == TMScenario.Learning:
+                        loss = self.machine.loss(inferenced, truth).detach()
+                    else:
+                        loss = float("nan")
 
                     yield {"objective": loss, "sample_num": batch_size}, truth, inferenced
 
@@ -141,38 +150,43 @@ class TMSupervisedEvaluatorMixin(TMEvaluatorMixin):
         #                                                    loss=avg_loss, epoch=epoch)
         # signal(TMEvaluationSignals.ON_MACHINE_LOSS_COMPUTED).send(loss_info)
 
-    def evaluate(self, train_batchstreams: TMDataStream, local_rank, epoch, step):
+    def evaluate(self, batchstreams: TMDataStream, scenario: TMScenario, local_rank, epoch, step):
 
         # if local_rank != 0:
         #     return
 
-        if not train_batchstreams.eval_channels:
+        if not batchstreams.eval_channels:
             return
 
         truth_machine_datastream = TMDataStream()
         truth_machine_datastream.level = TMDataLevel.Batch
 
-        truth_machine_datastream.eval_channels = train_batchstreams.eval_channels
+        truth_machine_datastream.eval_channels = batchstreams.eval_channels
 
         inference_machine_datastream = TMDataStream()
         inference_machine_datastream.level = TMDataLevel.Batch
-        inference_machine_datastream.eval_channels = train_batchstreams.eval_channels
+        inference_machine_datastream.eval_channels = batchstreams.eval_channels
         channeled_loss_streams = dict()
 
-        for channel in train_batchstreams.eval_channels:
+        for channel in batchstreams.eval_channels:
             loss_stream, truth_stream, inferenced_stream = isolate_iterators(
-                self.evaluate_channel(train_batchstreams[channel], channel, local_rank, epoch),
+                self.evaluate_channel(batchstreams[channel], channel, scenario, local_rank, epoch),
                 3
             )
             channeled_loss_streams[channel] = loss_stream
             truth_machine_datastream[channel] = truth_stream
             inference_machine_datastream[channel] = inferenced_stream
 
+        device = self.device(local_rank)
+
         info = MachineEvaluationStreamInfo(objective_stream=channeled_loss_streams,
                                            truth_stream=truth_machine_datastream,
                                            inferenced_stream=inference_machine_datastream,
-                                           local_rank=local_rank, device=None, epoch=epoch, step=step)
+                                           local_rank=local_rank, device=device, epoch=epoch, step=step)
+
+
         evaluation_results = self.evaluate_signal.send(info)
+
         return evaluation_results
 
 
@@ -243,9 +257,9 @@ class TMSupervisedLearnerMixin(TMLearnerMixin):
                     #     logger.warning(
                     #         f"we are repeating {duplicate_num} times of small batch with size {batch_size} for dp ")
                     #     batch_traits.duplicate(batch, duplicate_num)
-
-                    output = self.machine.forward_with_validation(batch, scenario=TMScenario.Learning)
-                    
+                    self.machine.validate_forward_input(batch, scenario=TMScenario.Learning, for_eval=False)
+                    output = self.machine.forward(batch, scenario=TMScenario.Learning, for_eval=False)
+                    self.machine.validate_forward_input(output, scenario=TMScenario.Learning, for_eval=False)
                     # batch.update(output)  # sometimes the truth is generated by machine
                     # deep_merge_dict(batch, output)
                     loss = self.machine.loss(output, batch)
@@ -306,7 +320,7 @@ class TMSupervisedLearnerMixin(TMLearnerMixin):
 
         # training_setting = self.optimization_strategy.hyper_params
 
-        self.runtime_options = runtime_options
+        # self.runtime_options = runtime_options
         # if training_setting.seed:
         #     seed = training_setting.seed
         #     random.seed(seed)
@@ -319,6 +333,17 @@ class TMSupervisedLearnerMixin(TMLearnerMixin):
         #                   'from checkpoints.')
 
         self.distributed_strategy.init(local_rank)
+
+        if runtime_options.mode == "eval":
+            P.OptimizerBehaviors.set_inference_mode(self.machine)
+            signal_returns = self.evaluate(train_batchstreams, TMScenario.Learning, local_rank, -1, -1)
+            assert len(signal_returns) == 1
+            evaluation_results = signal_returns[0][1]
+
+            self.metric_logging_strategy.log(evaluation_results)
+
+            P.OptimizerBehaviors.set_train_mode(self.machine)
+            return
 
         # self.optimization_strategy.act_on(self.machine)
         self.epoch = 0
@@ -373,6 +398,10 @@ class TMSuperviseLearner(TMSuperviseOperator,
 
         self.distributed_strategy.run(train_worker, batch_stream, runtime_options)
 
+    def test(self, config):
+        TMSupervisedLearnerMixin.test(self, config)
+
+
 
 def predict_worker(local_rank, predictor, data_streams, runtime_options):
     """
@@ -387,8 +416,9 @@ def predict_worker(local_rank, predictor, data_streams, runtime_options):
 
     """
     logger.warning(f"start inference {local_rank}")
-    D.set_device(local_rank)
-    return predictor.inference(local_rank, data_streams, runtime_options)
+
+    result = predictor.inference(local_rank, data_streams, runtime_options)
+    return result
 
 
 def remove_tensor(data):
@@ -416,7 +446,7 @@ def remove_tensor(data):
                 remove_tensor(data[key])
 
 
-class TMSuperviseInferencer(TMSuperviseOperator):
+class TMSuperviseInferencer(TMSuperviseOperator, TMSupervisedEvaluatorMixin):
     """
     TMLearner
     """
@@ -424,7 +454,19 @@ class TMSuperviseInferencer(TMSuperviseOperator):
     def __init__(self, hyper_params, machine, states=None):
         super().__init__(hyper_params, machine, scenario=TMScenario.Inference, states=states)
 
-    def inference_channel(self, local_rank, data_loader):
+    def inference_batch(self, batch, for_eval, local_rank):
+
+        batch_traits = self.machine.BatchTraits
+
+        batch = self.reallocate_data(batch, local_rank)
+        batch_size = batch_traits.batch_size(batch)
+
+        inferenced = self.machine.forward(batch, scenario=TMScenario.Inference, for_eval=for_eval)
+        deep_merge_dict(inferenced, batch)
+        yield inferenced
+
+    def inference_channel(self, data_loader, channel: str, for_eval,
+                          local_rank: int):
         """
 
         Args:
@@ -434,25 +476,18 @@ class TMSuperviseInferencer(TMSuperviseOperator):
         Returns:
 
         """
-
-        batch_traits = self.machine.BatchTraits
-
         P.OptimizerBehaviors.set_inference_mode(self.machine)
 
         with P.OptimizerBehaviors.no_grad():
-            for i, batch in tqdm(enumerate(data_loader)):
+            for i, batch in tqdm(enumerate(data_loader), desc=f"Inferencing Channel {channel}: "):
                 try:
-                    batch = self.reallocate_data(batch, local_rank)
-                    batch_size = batch_traits.batch_size(batch)
-
-                    inferenced = self.machine.forward(batch, scenario="inference")
-                    deep_merge_dict(inferenced, batch)
-                    yield inferenced
-
+                    yield from self.inference_batch(batch, for_eval, local_rank)
                 except Exception as e:
+                    batch_traits = self.machine.BatchTraits
                     shapes = batch_traits.shape(batch)
-                    logger.error(f"Learn for {i}-th Batch, Data Shapes = {shapes}")
-                    raise e
+                    logger.error(f"Inference for {i}-th Batch, Data Shapes = {shapes}")
+                    if "uri@task" in batch:
+                        logger.error(f"batches causing the error: {batch['uri@task']}")
 
     def inference(self, local_rank, predict_batchstreams: TMDataStream, runtime_options):
         """
@@ -472,19 +507,42 @@ class TMSuperviseInferencer(TMSuperviseOperator):
 
         """
 
-        inference_setting = self.hyper_params.inference
 
         self.local_rank = local_rank
 
         self.distributed_strategy.init(local_rank)
 
+
+            # why cannot it step into the predict_channel function.
+        #
+        # for channel in predict_batchstreams.eval_channels:
+        #
+        #     inference_machine_datastream[channel] = self.inference_channel(predict_batchstreams[channel],
+        #                                                                    channel=channel,
+        #                                                                    for_eval=True,
+        #                                                                    local_rank=local_rank)
+            # why cannot it step into the predict_channel function.
+
+
+        if predict_batchstreams.eval_channels:
+            signal_returns = self.evaluate(predict_batchstreams, TMScenario.Inference, local_rank, -1, -1)
+            assert len(signal_returns) == 1
+            evaluation_results = signal_returns[0][1]
+
+            self.metric_logging_strategy.log(evaluation_results)
+
+
         inference_machine_datastream = TMDataStream()
         inference_machine_datastream.level = TMDataLevel.Batch
         inference_machine_datastream.inference_channels = predict_batchstreams.inference_channels
 
+
         for channel in predict_batchstreams.inference_channels:
-            inference_machine_datastream[channel] = self.inference_channel(local_rank, predict_batchstreams[
-                channel])  # why cannot it step into the predict_channel function.
+
+            inference_machine_datastream[channel] = self.inference_channel(predict_batchstreams[channel],
+                                                                           channel=channel,
+                                                                           for_eval=False,
+                                                                           local_rank=local_rank)
 
         return inference_machine_datastream
 
@@ -500,19 +558,21 @@ class TMSuperviseInferencer(TMSuperviseOperator):
 
         """
 
+        self.runtime_options = runtime_options
+
         assert runtime_options.distributed.lower() != "ddp", "Inference does not support DDP"
 
         # logger.info(f"operate with parameter {runtime_options}")
-        assert machine_stream.level == TMDataLevel.Machine, f"wrong data level, {machine_stream.level}"
+        assert machine_stream.level == TMDataLevel.Batch, f"wrong data level, {machine_stream.level}"
 
-        memory_stream = self.fit_memory(machine_stream)
-        batch_stream = self.batchify(memory_stream)
-        infered_batchstream = self.distributed_strategy.run(predict_worker, batch_stream, runtime_options)
+        # memory_stream = self.fit_memory(machine_stream)
+        # batch_stream = self.batchify(memory_stream)
+        infered_batchstream = self.distributed_strategy.run(predict_worker, machine_stream, runtime_options)
 
-        infered_memory_stream = self.unbatchify(infered_batchstream)
-        infered_machine_stream = self.unfit_memory(infered_memory_stream)
+        # infered_memory_stream = self.unbatchify(infered_batchstream)
+        # infered_machine_stream = self.unfit_memory(infered_memory_stream)
 
-        return infered_machine_stream
+        return infered_batchstream
 
 
 

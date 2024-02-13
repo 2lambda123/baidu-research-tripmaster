@@ -3,6 +3,7 @@ TM Supervise System
 """
 
 from tripmaster.core.concepts.data import TMDataStream
+from tripmaster.core.concepts.scenario import TMScenario
 from tripmaster.core.system.system import TMSystem
 
 
@@ -31,12 +32,15 @@ class TMSuperviseSystem(TMSystem):
 
         input_datastream = self.build_machine_datastream(input_datastream)
 
+
         #        self.tp_modeler.update_downstream_component(self.task, self.problem)
+        if self.is_learning() and runtime_options.mode != "eval":
+            input_datastream.reuse()
 
         for callback in self.callbacks:
             callback.on_data_phase_finished(self)
 
-        if runtime_options.data_mode:
+        if runtime_options.mode == "data":
             self.post_system_creation()
             result = None
         else:
@@ -62,7 +66,6 @@ class TMSuperviseSystem(TMSystem):
             # CAUTION !!! do not delete this line !!!
             # We need the dummy_ref to make the system copied to child process in ddp
             self.operator.dummy_ref = self.evaluate_callback
-
             self.operator.evaluate_signal.connect(self.evaluate_callback)
 
             if self.is_learning():
@@ -73,8 +76,10 @@ class TMSuperviseSystem(TMSystem):
 
             if not self.is_learning():  # result is the inferenced machine stream
 
-                result = self.operator.unbatchify(result)
-                result = self.operator.unfit_memory(result)
+                result = self.operator.unbatchify(result, scenario=TMScenario.Inference)
+
+                result = self.operator.unfit_memory(result, scenario=TMScenario.Inference)
+
                 result = self.recover_input_datastream(result)
 
             for callback in self.callbacks:

@@ -14,9 +14,11 @@ logger = logging.getLogger(__name__)
 
 import paddle
 
-
-strategy = fleet.DistributedStrategy()
-fleet.init(is_collective=True, strategy=strategy)
+try:
+    strategy = fleet.DistributedStrategy()
+    fleet.init(is_collective=True, strategy=strategy)
+except:
+    logger.warning("fleet not able to initialize")
 
 def reduce_mean(tensor, nprocs):
     """
@@ -51,7 +53,8 @@ class PaddleNoDistributedStrategy(TMDistributedStrategy):
         """
         train_impl
         """
-        return func(0, self.operator, train_data_streams, runtime_options)
+        result = func(0, self.operator, train_data_streams, runtime_options)
+        return result
 
     def init(self, local_rank):
         """
@@ -370,6 +373,36 @@ class PaddleBasicTensorOperations(TMBasicTensorOperations):
 
     Tensor = paddle.Tensor
 
+
+    @classmethod
+    def zeros(cls, *args, dtype=None, device=None):
+        return paddle.zeros(args, dtype=dtype, device=device)
+
+    @classmethod
+    def ones(cls, *args, dtype=None, device=None):
+        return paddle.ones(args, dtype=dtype, device=device)
+
+
+    @classmethod
+    def all(cls, a):
+        return paddle.all(a)
+    
+    @classmethod
+    def any(cls, a):
+        return paddle.any(a)
+    
+    @classmethod
+    def logical_and(cls, a, b):
+        return paddle.logical_and(a, b)
+
+    @classmethod
+    def logical_or(cls, a, b):
+        return paddle.logical_or(a, b)
+
+    @classmethod
+    def logical_not(cls, a):
+        return paddle.logical_not(a)
+
     @classmethod
     def is_tensor(self, x):
         return isinstance(x, paddle.Tensor)
@@ -557,6 +590,7 @@ class PaddleBasicDeviceOperations(TMBasicDeviceOperations):
 
     @classmethod
     def set_device(cls, device):
+
         paddle.set_device(device)
 
     @classmethod

@@ -15,7 +15,7 @@ from torch.utils.data import Dataset
 from torch.utils.data import Sampler
 import math
 import numpy as np
-from typing import Iterator, Iterable, Optional, Sequence, List, TypeVar, Generic, Sized, Union
+from typing import Any, Iterator, Iterable, Optional, Sequence, List, TypeVar, Generic, Sized, Union
 from copy import deepcopy
 import multiprocessing
 from multiprocessing import Process
@@ -90,10 +90,8 @@ class TorchNoDistributedStrategy(TMDistributedStrategy):
         init_train_loop
         """
 
-        if self.use_gpu:
-            device = "cuda:" + str(local_rank)
-        else:
-            device = "cpu"
+
+        device = self.operator.device(local_rank)
 
         self.operator.machine.to(device)
 
@@ -143,10 +141,8 @@ class TorchDataParallelStrategy(TMDistributedStrategy):
         """
 
         self.distributed = False
-        if self.use_gpu:
-            device = "cuda:" + str(local_rank)
-        else:
-            device = "cpu"
+
+        device = self.operator.device(local_rank)
 
         self.operator.machine = TorchDPMachine(self.operator.machine)
         self.operator.machine.to(device)
@@ -221,14 +217,14 @@ class TorchDistributedDataParallelStrategy(TMDistributedStrategy):
 
         self.distributed = True
 
-        if self.use_gpu:
-            device = "cuda:" + str(local_rank)
-            backend = "nccl"
-            device_ids = [local_rank]
-        else:
-            device = "cpu"
+        device = self.operator.device(local_rank)
+        if device == "cpu":
             backend = "gloo"
             device_ids = None
+        else:
+            backend = "nccl"
+            device_ids = [local_rank]
+
 
         dist.init_process_group(backend=backend, init_method=f'tcp://127.0.0.1:{self.distributed_port}',
                                 world_size=self.world_size,
@@ -370,9 +366,42 @@ class TorchTypes(TMTypes):
 
 from more_itertools import chunked
 
-class TorchBasicTensorOperations(TMBasicTensorOperations):
+class TensorOpMeta(type):
+    def __getattr__(cls, name):
+        return getattr(torch, name)
+
+
+class TorchBasicTensorOperations(TMBasicTensorOperations, metaclass=TensorOpMeta):
 
     Tensor = torch.Tensor
+
+    @classmethod
+    def zeros(cls, *args, dtype=None, device=None):
+        return torch.zeros(* args, dtype=dtype, device=device)
+
+    @classmethod
+    def ones(cls, *args, dtype=None, device=None):
+        return torch.ones(* args, dtype=dtype, device=device)
+    
+    @classmethod
+    def all(cls, a):
+        return torch.all(a)
+    
+    @classmethod
+    def any(cls, a):
+        return torch.any(a)
+
+    @classmethod
+    def logical_and(cls, a, b):
+        return torch.logical_and(a, b)
+
+    @classmethod
+    def logical_or(cls, a, b):
+        return torch.logical_or(a, b)
+
+    @classmethod
+    def logical_not(cls, a):
+        return torch.logical_not(a)
 
     @classmethod
     def is_tensor(self, x):
