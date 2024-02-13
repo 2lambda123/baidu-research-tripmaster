@@ -410,7 +410,7 @@ class TMMergedDataChannel(TMConfigurable):
 
     @property
     def sample_num(self):
-        return min([v.sample_num for v in self.__channel_dict.values()])
+        return min(v.sample_num for v in self.__channel_dict.values())
 
     def __getitem__(self, item):
         return dict((k, self.__channel_dict[k][item]) for k in self.__channel_dict.keys())

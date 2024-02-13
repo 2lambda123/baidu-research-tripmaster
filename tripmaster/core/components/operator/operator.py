@@ -251,7 +251,7 @@ class TMLearnerMixin(TMConfigurable):
     def check_optimizer_submodule_match(self, submodules):
         valid_submoudle_keys = set()
         for key, modules in submodules.items():
-            parameters = sum([list(m.parameters()) for m in modules], [])
+            parameters = sum(list(m.parameters()) for m in modules)
             if len(parameters) > 0:
                 valid_submoudle_keys.add(key)
 
@@ -294,7 +294,7 @@ class TMLearnerMixin(TMConfigurable):
 
         for name, modules in submodules.items():
 
-            parameters = sum([list(m.parameters()) for m in modules], [])
+            parameters = sum(list(m.parameters()) for m in modules)
             if len(parameters) == 0:
                 continue
 

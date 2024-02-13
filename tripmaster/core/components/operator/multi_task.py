@@ -49,7 +49,7 @@ class TMMultiLearner(TMSuperviseLearner):
 
         for name, modules in submodules.items():
 
-            parameters = sum([list(m.parameters()) for m in modules], [])
+            parameters = sum(list(m.parameters()) for m in modules)
             if len(parameters) == 0:
                 continue
 
