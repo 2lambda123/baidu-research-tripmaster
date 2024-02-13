@@ -18,7 +18,7 @@ from tripmaster.core.concepts.scenario import TMScenario
 from tripmaster.core.launcher.launcher import launch
 from tripmaster.core.system.supervise import TMSuperviseSystem
 from tripmaster.utils.data import split_dataset
-import random
+import secrets
 
 class MnistDataStream(TMDataStream):
 
@@ -35,7 +35,7 @@ class MnistDataStream(TMDataStream):
         test_dataset = [{"image": image, "label": label}
                         for image, label in paddle.vision.datasets.MNIST(mode='test', transform=ToTensor())]
 
-        random.shuffle(train_dataset)
+        secrets.SystemRandom().shuffle(train_dataset)
         ratio = self.hyper_params.training_ratio
         train_dataset, dev_dataset = split_dataset(train_dataset, [ratio, 1 - ratio])
 

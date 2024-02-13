@@ -1,8 +1,8 @@
 """
 data set operations
 """
-import random
 import math
+import secrets
 
 
 def split_dataset(data, ratios):
@@ -16,7 +16,7 @@ def split_dataset(data, ratios):
 
     """
 
-    random.shuffle(data)
+    secrets.SystemRandom().shuffle(data)
 
     assert sum(ratios) == 1, "sum of ratios does not equal to 1"
 

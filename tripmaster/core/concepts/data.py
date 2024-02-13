@@ -8,6 +8,7 @@ from typing import Dict, Type
 
 from tripmaster import logging
 from tripmaster.core.concepts.component import TMConfigurable, TMSerializable
+import secrets
 
 logger = logging.getLogger(__name__)
 
@@ -171,13 +172,13 @@ class TMDataStream(TMSerializable):
         if not self.hyper_params.train_sample_ratio_for_eval or self.hyper_params.train_sample_ratio_for_eval <= 0:
             return 
 
-        import random, copy 
+        import copy 
         sampled_channels = []
         for channel in self.learn_channels:
             assert channel in self.__channels
 
             sampled = [copy.deepcopy(sample) for sample in self.__channels[channel]
-                            if random.random() < self.hyper_params.train_sample_ratio_for_eval]
+                            if secrets.SystemRandom().random() < self.hyper_params.train_sample_ratio_for_eval]
             if len(sampled) <= 0:
                 continue
             sampled_channels.append(f"{channel}#sampled")
